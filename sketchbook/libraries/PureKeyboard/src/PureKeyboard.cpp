@@ -32,7 +32,7 @@ static struct KeyReport {
   uint8_t modifiers;
   uint8_t reserved;
   uint8_t keys[6];
-} _keyReport;
+} keyReport;
 
 static const uint8_t _hidReportDescriptor[] PROGMEM = {
 
@@ -68,7 +68,7 @@ static const uint8_t _hidReportDescriptor[] PROGMEM = {
 };
 
 static void sendReport() {
-	HID().SendReport(2, &_keyReport, sizeof(KeyReport));
+	HID().SendReport(2, &keyReport, sizeof(KeyReport));
 }
 
 PureKeyboard_::PureKeyboard_() {
@@ -88,26 +88,26 @@ void PureKeyboard_::end(void) {
 // call release(), releaseAll(), or otherwise clear the report and resend.
 size_t PureKeyboard_::press(uint8_t k) {
 	uint8_t i;
-	if (k >= KEY_LEFT_CTRL) {			// it's a non-printing key (not a modifier)
-		_keyReport.modifiers |= (1<<(k-128));
-		k = 0;
-	}
-	
-	// Add k to the key report only if it's not already present
-	// and if there is an empty slot.
-	if (_keyReport.keys[0] != k && _keyReport.keys[1] != k && 
-		_keyReport.keys[2] != k && _keyReport.keys[3] != k &&
-		_keyReport.keys[4] != k && _keyReport.keys[5] != k) {
-		
-		for (i=0; i<6; i++) {
-			if (_keyReport.keys[i] == 0x00) {
-				_keyReport.keys[i] = k;
-				break;
+	if (k >= KEY_LEFT_CTRL) {
+		k -= KEY_LEFT_CTRL;
+		keyReport.modifiers |= (1<<k);
+	} else {
+		// Add k to the key report only if it's not already present
+		// and if there is an empty slot.
+		if (keyReport.keys[0] != k && keyReport.keys[1] != k && 
+			keyReport.keys[2] != k && keyReport.keys[3] != k &&
+			keyReport.keys[4] != k && keyReport.keys[5] != k) {
+			
+			for (i=0; i<6; i++) {
+				if (keyReport.keys[i] == 0x00) {
+					keyReport.keys[i] = k;
+					break;
+				}
 			}
+			if (i == 6) {
+				return 0;
+			}	
 		}
-		if (i == 6) {
-			return 0;
-		}	
 	}
 	sendReport();
 	return 1;
@@ -118,16 +118,16 @@ size_t PureKeyboard_::press(uint8_t k) {
 // it shouldn't be repeated any more.
 size_t PureKeyboard_::release(uint8_t k) {
 	uint8_t i;
-	if (k >= KEY_LEFT_CTRL) {			// it's a non-printing key (not a modifier)
-		_keyReport.modifiers |= (1<<(k-128));
-		k = 0;
-	}
-	
-	// Test the key report to see if k is present.  Clear it if it exists.
-	// Check all positions in case the key is present more than once (which it shouldn't be)
-	for (i=0; i<6; i++) {
-		if (0 != k && _keyReport.keys[i] == k) {
-			_keyReport.keys[i] = 0x00;
+	if (k >= KEY_LEFT_CTRL) {
+		k -= KEY_LEFT_CTRL;
+		keyReport.modifiers &= ~(1<<k);
+	} else {		
+		// Test the key report to see if k is present.  Clear it if it exists.
+		// Check all positions in case the key is present more than once (which it shouldn't be)
+		for (i=0; i<6; i++) {
+			if (0 != k && keyReport.keys[i] == k) {
+				keyReport.keys[i] = 0x00;
+			}
 		}
 	}
 
@@ -136,13 +136,13 @@ size_t PureKeyboard_::release(uint8_t k) {
 }
 
 void PureKeyboard_::releaseAll() {
-	_keyReport.keys[0] = 0;
-	_keyReport.keys[1] = 0;	
-	_keyReport.keys[2] = 0;
-	_keyReport.keys[3] = 0;	
-	_keyReport.keys[4] = 0;
-	_keyReport.keys[5] = 0;	
-	_keyReport.modifiers = 0;
+	keyReport.keys[0] = 0;
+	keyReport.keys[1] = 0;	
+	keyReport.keys[2] = 0;
+	keyReport.keys[3] = 0;	
+	keyReport.keys[4] = 0;
+	keyReport.keys[5] = 0;	
+	keyReport.modifiers = 0;
 	sendReport();
 }
 

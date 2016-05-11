@@ -10,10 +10,22 @@
 const int RESTORE_PIN = A2;
 const int PB_PINS[8] = { 0, 1,  2,  3,  4,  5,  6,  7 };
 const int PA_PINS[8] = { 8, 9, 10, 11, 12, 13, A0, A1 }; // A0 is pin 18 on Leonardo...
-//const int PA_PINS[8] = { 8, 8, 8, 8, 8, 8, 8, 8 }; // A0 is pin 18 on Leonardo...
 
 int cur_state = 0;
 byte keyboard_states[2][9]; // Restore is last byte, MSB
+
+byte KEYCODES[9][8] {
+  {KEY_UP_ARROW,   KEY_F5,          KEY_F3,          KEY_F1,          KEY_F7,    KEY_LEFT_ARROW, KEY_ENTER,           KEY_DELETE },
+  {KEY_LEFT_SHIFT, KEY_E,           KEY_S,           KEY_Z,           KEY_4,     KEY_A,          KEY_W,               KEY_3, },
+  {KEY_X,          KEY_T,           KEY_F,           KEY_C,           KEY_6,     KEY_D,          KEY_R,               KEY_5},
+  {KEY_V,          KEY_U,           KEY_H,           KEY_B,           KEY_8,     KEY_G,          KEY_Y,               KEY_7},
+  {KEY_N,          KEY_O,           KEY_K,           KEY_M,           KEY_0,     KEY_J,          KEY_I,               KEY_9},
+  {KEY_COMMA,      KEY_PAGEUP/*@*/, KEY_PAGEUP/*:*/, KEY_PERIOD,      KEY_MINUS, KEY_L,          KEY_P,               KEY_PAGEUP /* + */},
+  {KEY_SLASH,      KEY_PAGEUP/*^*/, KEY_EQUALS,      KEY_RIGHT_SHIFT, KEY_HOME,  KEY_SEMICOLON,  KEY_PAGEUP/* * */,   KEY_PAGEUP /* Pound */},
+  {KEY_ESCAPE,     KEY_Q,           KEY_LEFT_GUI,    KEY_SPACE,       KEY_2,     KEY_LEFT_CTRL,  KEY_PAGEUP /* <- */, KEY_1 },
+  
+  {KEY_PAGEUP /* Restore */, 0, 0, 0, 0, 0, 0, 0}
+};
 
 void setup() {
   PureKeyboard.begin();
@@ -71,26 +83,49 @@ void printByte(byte val) {
   Serial.print(s);
 }
 
+void handleChanges() {
+  boolean dump = false;
+  int old_state = (cur_state + 1) % 2;
+  for (int i = 0; i < 9; i++) {
+    byte oldState = keyboard_states[old_state][i];
+    byte newState = keyboard_states[cur_state][i];
+    if (oldState != newState) {
+      dump = true;
+      byte changed = oldState ^ newState;
+//      Serial.print("changed == "); printByte(changed); Serial.println();
+      int mask = 0x80;
+      for (int j = 0; j < 7; j++) {
+//        Serial.print("mask == "); printByte(mask); Serial.println();
+//        Serial.print("change & mask == "); printByte(changed & mask); Serial.println();
+        if (changed & mask) {
+          int newBit = newState & mask;
+          int key = KEYCODES[i][j];            
+          if (newBit == 0) {
+//            Serial.print("pressing ");
+            PureKeyboard.press(key);
+          } else {            
+//            Serial.print("releasing ");
+            PureKeyboard.release(key);
+          }
+//          Serial.println(key);
+        }
+        mask >>= 1;       
+      }
+    }
+  }  
+//  if (dump) {
+//    Serial.print("New state: ");
+//    for (int i = 0; i < 9; i++) {
+//      printByte(keyboard_states[cur_state][i]); Serial.print(" ");
+//    }
+//    Serial.println();
+//  }
+}
+
 void loop() {
   // read new state
   readState();
-
-  bool changed = false;
-  int old_state = (cur_state + 1) % 2;
-  for (int i = 0; i < 9; i++) {
-    if (keyboard_states[old_state][i] != keyboard_states[cur_state][i]) {
-      changed = true;
-      break;
-    }
-  }
-
-  if (changed) {
-    Serial.print("New state: ");
-    for (int i = 0; i < 9; i++) {
-      printByte(keyboard_states[cur_state][i]); Serial.print(" ");
-    }
-    Serial.println();
-  }
-
+  handleChanges();
   cur_state = (cur_state + 1) % 2;
 }
+
