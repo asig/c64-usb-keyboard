@@ -1,35 +1,48 @@
 // Notes:
-// - On Ubuntu, make sure ModemManager does not claim the Arduino. Either deinstall ModemManager
-//   (sudo apt-get remove modemmanager), or follow the advise here:
+// - For Leonardo: On Ubuntu, make sure ModemManager does not claim the 
+//   Arduino. Either deinstall ModemManager (sudo apt-get remove modemmanager),
+//   or follow the advise here:
 //   http://starter-kit.nettigo.eu/2015/serial-port-busy-for-avrdude-on-ubuntu-with-arduino-leonardo-eth/
-// - Can't use A6/A7 as digital inputs, see http://forum.arduino.cc/index.php?topic=123176.0
+// - For Nano: Can't use A6/A7 as digital inputs, see http://forum.arduino.cc/index.php?topic=123176.0
 // - Can't use D13 as input, see https://arduinodiy.wordpress.com/2012/04/28/solving-the-d13-problem-on-your-arduino/
 
 #include "PureKeyboard.h"
 
+#define DEBUG
+
+// Input pins coming from keyboard matrix.
+// If you're wondering why I'm using A3 instead of 5: It seems that the cheap
+// chinese Leonardo clone I'm using is somehow buggy. When reading out row 2, 
+// pin 5 would *always* return LOW. No idea what is causing this (it worked on
+// on a *real* Leonardo), but switching to A3 instead seems to do the trick.
+const int PB_PINS[8] = { 0, 1,  2,  3,  4, A3,  6,  7 };
 const int RESTORE_PIN = A2;
-const int PB_PINS[8] = { 0, 1,  2,  3,  4,  5,  6,  7 };
+
+// Output pins, selecting the keyboard matrix row to read.
 const int PA_PINS[8] = { 8, 9, 10, 11, 12, 13, A0, A1 }; // A0 is pin 18 on Leonardo...
 
 int cur_state = 0;
 byte keyboard_states[2][9]; // Restore is last byte, MSB
 
 byte KEYCODES[9][8] {
-  {KEY_UP_ARROW,   KEY_F5,          KEY_F3,          KEY_F1,          KEY_F7,    KEY_LEFT_ARROW, KEY_ENTER,           KEY_DELETE },
-  {KEY_LEFT_SHIFT, KEY_E,           KEY_S,           KEY_Z,           KEY_4,     KEY_A,          KEY_W,               KEY_3, },
-  {KEY_X,          KEY_T,           KEY_F,           KEY_C,           KEY_6,     KEY_D,          KEY_R,               KEY_5},
-  {KEY_V,          KEY_U,           KEY_H,           KEY_B,           KEY_8,     KEY_G,          KEY_Y,               KEY_7},
-  {KEY_N,          KEY_O,           KEY_K,           KEY_M,           KEY_0,     KEY_J,          KEY_I,               KEY_9},
-  {KEY_COMMA,      KEY_PAGEUP/*@*/, KEY_PAGEUP/*:*/, KEY_PERIOD,      KEY_MINUS, KEY_L,          KEY_P,               KEY_PAGEUP /* + */},
-  {KEY_SLASH,      KEY_PAGEUP/*^*/, KEY_EQUALS,      KEY_RIGHT_SHIFT, KEY_HOME,  KEY_SEMICOLON,  KEY_PAGEUP/* * */,   KEY_PAGEUP /* Pound */},
-  {KEY_ESCAPE,     KEY_Q,           KEY_LEFT_GUI,    KEY_SPACE,       KEY_2,     KEY_LEFT_CTRL,  KEY_PAGEUP /* <- */, KEY_1 },
+             /* Col 7          Col 6            Col 5            Col 4            Col 3      Col 2            Col 1                Col 0
+/* Row 0 */  {KEY_UP_ARROW,   KEY_F5,          KEY_F3,          KEY_F1,          KEY_F7,    KEY_LEFT_ARROW, KEY_ENTER,           KEY_BACKSPACE },
+/* Row 1 */  {KEY_LEFT_SHIFT, KEY_E,           KEY_S,           KEY_Z,           KEY_4,     KEY_A,          KEY_W,               KEY_3, },
+/* Row 2 */  {KEY_X,          KEY_T,           KEY_F,           KEY_C,           KEY_6,     KEY_D,          KEY_R,               KEY_5},
+/* Row 3 */  {KEY_V,          KEY_U,           KEY_H,           KEY_B,           KEY_8,     KEY_G,          KEY_Y,               KEY_7},
+/* Row 4 */  {KEY_N,          KEY_O,           KEY_K,           KEY_M,           KEY_0,     KEY_J,          KEY_I,               KEY_9},
+/* Row 5 */  {KEY_COMMA,      KEY_PAGEUP/*@*/, KEY_PAGEUP/*:*/, KEY_PERIOD,      KEY_MINUS, KEY_L,          KEY_P,               KEY_PAGEUP /* + */},
+/* Row 6 */  {KEY_SLASH,      KEY_PAGEUP/*^*/, KEY_EQUALS,      KEY_RIGHT_SHIFT, KEY_HOME,  KEY_SEMICOLON,  KEY_PAGEUP/* * */,   KEY_PAGEUP /* Pound */},
+/* Row 7 */  {KEY_ESCAPE,     KEY_Q,           KEY_LEFT_GUI,    KEY_SPACE,       KEY_2,     KEY_LEFT_CTRL,  KEY_PAGEUP /* <- */, KEY_1 },
   
   {KEY_PAGEUP /* Restore */, 0, 0, 0, 0, 0, 0, 0}
 };
 
 void setup() {
   PureKeyboard.begin();
+#ifdef DEBUG
   Serial.begin(115200);
+#endif  
 
   for (int i = 0; i < 9; i++) {
     keyboard_states[0][i] = 0xff;
@@ -41,8 +54,6 @@ void setup() {
     pinMode(PB_PINS[i], INPUT_PULLUP);
   }
   pinMode(RESTORE_PIN, INPUT_PULLUP);
-
-  Serial.println("Keyboard ready.");
 }
 
 byte readKeys() {  
@@ -92,34 +103,44 @@ void handleChanges() {
     if (oldState != newState) {
       dump = true;
       byte changed = oldState ^ newState;
-//      Serial.print("changed == "); printByte(changed); Serial.println();
+#ifdef DEBUG            
+      Serial.print("changed == "); printByte(changed); Serial.println();
+#endif            
       int mask = 0x80;
-      for (int j = 0; j < 7; j++) {
-//        Serial.print("mask == "); printByte(mask); Serial.println();
-//        Serial.print("change & mask == "); printByte(changed & mask); Serial.println();
+      for (int j = 0; j < 8; j++) {
+#ifdef DEBUG            
+        Serial.print("mask == "); printByte(mask); 
+        Serial.print("  |  change & mask == "); printByte(changed & mask); 
+        Serial.println();
+#endif            
         if (changed & mask) {
           int newBit = newState & mask;
           int key = KEYCODES[i][j];            
           if (newBit == 0) {
-//            Serial.print("pressing ");
+#ifdef DEBUG            
+            Serial.print("pressing "); Serial.println(key);
+#endif            
             PureKeyboard.press(key);
           } else {            
-//            Serial.print("releasing ");
+#ifdef DEBUG            
+            Serial.print("releasing "); Serial.println(key);
+#endif            
             PureKeyboard.release(key);
           }
-//          Serial.println(key);
         }
         mask >>= 1;       
       }
     }
   }  
-//  if (dump) {
-//    Serial.print("New state: ");
-//    for (int i = 0; i < 9; i++) {
-//      printByte(keyboard_states[cur_state][i]); Serial.print(" ");
-//    }
-//    Serial.println();
-//  }
+#ifdef DEBUG  
+  if (dump) {
+    Serial.print("New state: ");
+    for (int i = 0; i < 9; i++) {
+      printByte(keyboard_states[cur_state][i]); Serial.print(" ");
+    }
+    Serial.println();
+  }
+#endif  
 }
 
 void loop() {
